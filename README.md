@@ -14,6 +14,13 @@ the JWT filter in the HTTP filter chain. When JWT rejects a request and generate
 reply, the response only traverses the encode path of filters that already processed the
 request on the decode path — so the transformation filter never runs.
 
+Two setups are provided, differing in how JWT auth is configured:
+
+| Setup | JWT resource | Transformation resource |
+|---|---|---|
+| `install/setup.sh` | `EnterpriseKgatewayTrafficPolicy.entJWT` | `EnterpriseKgatewayTrafficPolicy.entTransformation` |
+| `install/setup-oss-jwt.sh` | `TrafficPolicy.jwtAuth` + `GatewayExtension` | `EnterpriseKgatewayTrafficPolicy.entTransformation` |
+
 ## Expected vs. Actual
 
 | Scenario | Expected (if `early` stage works) | Actual (if bug present) |
@@ -40,19 +47,34 @@ cd install
 ./install-ent-kgateway-with-helm.sh
 ```
 
-## Setup
+## Setup 1: `entJWT` in EnterpriseKgatewayTrafficPolicy
 
-Run `install/setup.sh` to:
-- Generate an RSA-2048 key pair (`secrets/jwt-private.pem`, `secrets/jwt-public.pem`)
-- Deploy the Gateway, HTTPBin app, ReferenceGrant, and HTTPRoute
-- Deploy the `EnterpriseKgatewayTrafficPolicy` with:
-  - `entJWT.beforeExtAuth` using the generated inline JWKS (RSA public key)
-  - `entTransformation.stages.early.responses` that transforms 401 → 418 and adds `x-debug-transformation-early: applied`
+Deploys a single `EnterpriseKgatewayTrafficPolicy` combining `entJWT.beforeExtAuth` (JWT auth)
+and `entTransformation.stages.early` (staged transformation) on the same resource.
 
 ```sh
 cd install
 ./setup.sh
 ```
+
+## Setup 2: `jwtAuth` in TrafficPolicy (OSS)
+
+Deploys JWT auth using the OSS `TrafficPolicy.jwtAuth` referencing a `GatewayExtension` that
+holds the JWT provider config (inline JWKS). The staged transformation is applied via a separate
+`EnterpriseKgatewayTrafficPolicy` targeting the same HTTPRoute.
+
+Resources deployed:
+- `GatewayExtension/jwt-providers` — JWT provider with inline RSA public key
+- `TrafficPolicy/jwt-auth` — references the `GatewayExtension` via `jwtAuth.extensionRef`
+- `EnterpriseKgatewayTrafficPolicy/staged-transformation` — `entTransformation.stages.early` only
+
+```sh
+cd install
+./setup-oss-jwt.sh
+```
+
+The two setup scripts are mutually exclusive and clean up after each other: running `setup.sh`
+removes the OSS policies, and running `setup-oss-jwt.sh` removes the enterprise JWT policy.
 
 ## Generate a JWT
 
@@ -61,7 +83,7 @@ cd install
 ```
 
 This generates a valid RS256 JWT (1h TTL) signed with `secrets/jwt-private.pem`, which
-matches the inline JWKS in the policy.
+matches the inline JWKS in the deployed policy.
 
 ## Run the tests
 

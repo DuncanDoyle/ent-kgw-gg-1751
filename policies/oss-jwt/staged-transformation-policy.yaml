@@ -1,0 +1,34 @@
+apiVersion: enterprisekgateway.solo.io/v1alpha1
+kind: EnterpriseKgatewayTrafficPolicy
+metadata:
+  name: staged-transformation
+  namespace: default
+spec:
+  targetRefs:
+    - name: api-example-com
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+  # Staged transformation — 'early' stage runs before ExtAuth and other filters.
+  #
+  # ISSUE UNDER TEST (GG-1751):
+  # When the JWT filter (configured via TrafficPolicy.jwtAuth above) rejects a
+  # request and generates a local 401 reply, does the 'early' staged transformation
+  # intercept it? If the 'early' filter is placed AFTER the JWT filter in the
+  # Envoy HTTP filter chain, it will never see the JWT-generated 401.
+  entTransformation:
+    stages:
+      early:
+        responses:
+          - transformation:
+              template:
+                # Don't try to parse the response body as JSON — the JWT 401
+                # body is plain text ("Jwt verification fails"), which would
+                # cause a parse error and abort the transformation.
+                parseBodyBehavior: DontParse
+                headers:
+                  # Debug header: present on response = early transformation fired.
+                  # If absent on a JWT 401, the filter is not intercepting local replies.
+                  "x-debug-transformation-early": "applied"
+                  # Transform 401 -> 418 to make it visually obvious.
+                  # Expected: 418  |  Actual (if bug): 401
+                  ":status": '{% if header(":status") == "401" %}418{% else %}{{ header(":status") }}{% endif %}'

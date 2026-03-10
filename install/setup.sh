@@ -31,6 +31,12 @@ kubectl apply -f referencegrants/httpbin-ns/default-ns-httproute-service-rg.yaml
 printf "\nDeploy HTTPRoute...\n"
 kubectl apply -f routes/api-example-com-httproute.yaml
 
+# Remove OSS JWT policies if present (allows switching from setup-oss-jwt.sh)
+printf "\nRemoving OSS JWT policies (if present)...\n"
+kubectl delete trafficpolicy jwt-auth -n default --ignore-not-found
+kubectl delete gatewayextension jwt-providers -n default --ignore-not-found
+kubectl delete enterprisekgatewaytrafficpolicy staged-transformation -n default --ignore-not-found
+
 # JWT + Staged Transformation policy
 # The RSA public key is read from secrets/jwt-public.pem (generated above),
 # indented to match the YAML structure, and injected inline into the policy.

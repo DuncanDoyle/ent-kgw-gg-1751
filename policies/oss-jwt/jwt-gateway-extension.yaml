@@ -1,0 +1,15 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: GatewayExtension
+metadata:
+  name: jwt-providers
+  namespace: default
+spec:
+  jwt:
+    providers:
+      - name: test-issuer
+        issuer: https://dev.example.com
+        jwks:
+          local:
+            # Public key is injected by install/setup-oss-jwt.sh from secrets/jwt-public.pem
+            inline: |
+              PUBLIC_KEY_PLACEHOLDER

@@ -1,0 +1,13 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: jwt-auth
+  namespace: default
+spec:
+  targetRefs:
+    - name: api-example-com
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+  jwtAuth:
+    extensionRef:
+      name: jwt-providers
