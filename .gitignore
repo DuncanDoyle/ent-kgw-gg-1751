@@ -1,0 +1,2 @@
+# Generated JWT key pair — run scripts/generate-keys.sh or install/setup.sh to create
+secrets/*.pem

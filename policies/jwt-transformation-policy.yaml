@@ -1,0 +1,50 @@
+apiVersion: enterprisekgateway.solo.io/v1alpha1
+kind: EnterpriseKgatewayTrafficPolicy
+metadata:
+  name: jwt-staged-transformation
+  namespace: default
+spec:
+  targetRefs:
+    - name: api-example-com
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+  # JWT authentication — placed in the beforeExtAuth stage so it runs
+  # before any external auth filter.
+  #
+  # ISSUE UNDER TEST (GG-1751):
+  # When the JWT filter rejects a request and generates a local 401 reply,
+  # Envoy only runs the encode path for filters that already processed the
+  # request on the decode path. The question is whether the 'early' staged
+  # transformation (below) is placed BEFORE or AFTER the JWT filter in the
+  # Envoy HTTP filter chain. If it is placed AFTER, the 'early' transformation
+  # will never see the JWT-generated 401, and the response won't be modified.
+  entJWT:
+    beforeExtAuth:
+      providers:
+        test-issuer:
+          issuer: https://dev.example.com
+          jwks:
+            local:
+              # Public key is injected by install/setup.sh from secrets/jwt-public.pem
+              key: |
+                PUBLIC_KEY_PLACEHOLDER
+  # Staged transformation — 'early' stage runs before ExtAuth and other filters.
+  entTransformation:
+    stages:
+      early:
+        responses:
+          - transformation:
+              template:
+                # Don't try to parse the response body as JSON — the JWT 401
+                # body is plain text ("Jwt verification fails"), which would
+                # cause a parse error and abort the transformation.
+                parseBodyBehavior: DontParse
+                headers:
+                  # Debug header: if this appears on the JWT 401 response, the
+                  # 'early' transformation fired and CAN intercept local replies.
+                  # If it is absent on the JWT 401, the filter chain ordering
+                  # prevents the 'early' transformation from seeing local replies.
+                  "x-debug-transformation-early": "applied"
+                  # Transform 401 → 418 to make it visually obvious whether the
+                  # transformation ran (expected: 418, actual if bug: 401).
+                  ":status": '{% if header(":status") == "401" %}418{% else %}{{ header(":status") }}{% endif %}'
